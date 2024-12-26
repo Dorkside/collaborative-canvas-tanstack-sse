@@ -23,6 +23,8 @@ By the end of this tutorial, you will have built a fully functional collaborativ
   - [2. Building the Backend](#2-building-the-backend)
   - [3. Frontend: Setting Up Vue 3](#3-frontend-setting-up-vue-3)
   - [4. Adding Default State and Local Drawing](#4-adding-default-state-and-local-drawing)
+  - [5. Making use of TanStack Query advanced features](#5-making-use-of-tanstack-query-advanced-features)
+  - [6. Wrap-up: SSE vs Polling](#6-wrap-up-sse-vs-polling)
 - [Getting the Source Code](#getting-the-source-code)
 
 ## Target Audience
@@ -525,6 +527,108 @@ By the end of this tutorial, you will have built a fully functional collaborativ
      ```
 
    - **Testing Tip:** Click and drag on the canvas to draw lines. Ensure that the lines appear as you draw.
+  
+### 5. Making use of TanStack Query advanced features
+
+To enhance the user experience and make the application more robust, we can leverage some of TanStack Query's advanced features such as optimistic updates and error handling.
+
+1. **Optimistic Updates**: This feature allows the UI to update immediately after a drawing action, even before the server confirms the action. This provides a smoother user experience.
+
+2. **Error Handling**: Implement robust error handling to manage network issues or server errors gracefully.
+
+3. **Query Invalidation**: Ensure that the canvas state is always fresh and consistent across all clients by invalidating queries after mutations.
+
+Here is an example of how to implement these features in `useCanvasState.js`:
+
+```javascript
+import { ref, watch } from 'vue';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/vue-query';
+
+export function useCanvasState() {
+  const lines = ref([]);
+  const queryClient = useQueryClient();
+
+  // Fetch initial canvas state
+  const { data: initialState, isPending, isFetching, isError, error } = useQuery({
+    queryKey: ['canvas'],
+    queryFn: () => fetch('http://localhost:3000/canvas').then((res) => res.json()),
+  });
+
+  // Mutation to push new line to the server with optimistic updates
+  const mutation = useMutation({
+    mutationFn: (newLine) => {
+      return fetch('http://localhost:3000/draw', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(newLine),
+      });
+    },
+    onMutate: async (newLine) => {
+      await queryClient.cancelQueries(['canvas']);
+      const previousLines = queryClient.getQueryData(['canvas']);
+      queryClient.setQueryData(['canvas'], (old) => [...old, newLine]);
+      return { previousLines };
+    },
+    onError: (err, newLine, context) => {
+      queryClient.setQueryData(['canvas'], context.previousLines);
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries(['canvas']);
+    },
+  });
+
+  // Watch for changes in initialState and update lines
+  watch(initialState, (newState) => {
+    if (newState) {
+      lines.value = newState;
+    }
+  });
+
+  // Subscribe to SSE for real-time updates
+  const eventSource = new EventSource('http://localhost:3000/events');
+  eventSource.onmessage = (event) => {
+    const newLine = JSON.parse(event.data);
+    lines.value = [...lines.value, newLine];
+  };
+
+  // Function to add a new line and push to the server
+  function addLine(newLine) {
+    mutation.mutate(newLine);
+  }
+
+  return {
+    lines,
+    isPending,
+    isFetching,
+    isError,
+    error,
+    addLine,
+  };
+}
+```
+
+By implementing these features, you can ensure a more responsive and reliable collaborative drawing experience for your users.
+
+### 6. Wrap-up: SSE vs Polling
+
+When building real-time applications, SSE (Server-Sent Events) combined with TanStack Query offers significant benefits compared to a generic polling mechanism:
+
+- **Immediate updates**: Polling requires repeated requests that can delay updates. SSE pushes new data automatically, letting the UI react faster.  
+- **Reduced overhead**: A single persistent connection typically uses fewer resources than frequent polls, which improves scalability.  
+- **Simplicity**: SSE is easier to implement for one-way communication than solutions like WebSockets, while still delivering near-instant updates.  
+- **Better proxy compatibility**: SSE often works more reliably behind corporate proxies than WebSockets do, making it suitable for enterprise contexts.
+
+### Potential Drawbacks
+- **Browser support**: Although most modern browsers support SSE, older or less common environments may not.  
+- **One-way limitation**: SSE flows data from server to client. Additional mechanisms may be needed for client-to-server commands if your app requires two-way communication.  
+
+In many cases, these benefits justify the added complexity and learning curve, especially for applications that require frequent real-time updates without complicated bidirectional data flow.
+
+## Why TanStack?
+- **Flexible and Powerful**: TanStack Query handles complex data fetching scenarios with features like caching, invalidation, and optimistic updates.  
+- **Declarative Approach**: Less boilerplate code for tracking request states. Simplifies data flow and state management.
 
 ## Getting the Source Code
 

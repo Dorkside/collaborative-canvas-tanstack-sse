@@ -11,7 +11,7 @@ export function useCanvasState() {
     queryFn: () => fetch('http://localhost:3000/canvas').then((res) => res.json()),
   });
 
-  // Mutation to push new line to the server
+  // Mutation to push new line to the server with optimistic updates
   const mutation = useMutation({
     mutationFn: (newLine) => {
       return fetch('http://localhost:3000/draw', {
@@ -22,7 +22,16 @@ export function useCanvasState() {
         body: JSON.stringify(newLine),
       });
     },
-    onSuccess: () => {
+    onMutate: async (newLine) => {
+      await queryClient.cancelQueries(['canvas']);
+      const previousLines = queryClient.getQueryData(['canvas']);
+      queryClient.setQueryData(['canvas'], (old) => [...old, newLine]);
+      return { previousLines };
+    },
+    onError: (err, newLine, context) => {
+      queryClient.setQueryData(['canvas'], context.previousLines);
+    },
+    onSettled: () => {
       queryClient.invalidateQueries(['canvas']);
     },
   });
