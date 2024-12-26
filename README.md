@@ -11,6 +11,20 @@ By the end of this tutorial, you will have built a fully functional collaborativ
 - Implement Server-Sent Events (SSE) for real-time updates.
 - Synchronize client actions with server-side state efficiently.
 
+## Table of Contents
+
+- [Target Audience](#target-audience)
+- [Features](#features)
+- [Technical Stack](#technical-stack)
+  - [Frontend](#frontend)
+  - [Backend](#backend)
+- [Tutorial Outline](#tutorial-outline)
+  - [1. Setting Up the Environment](#1-setting-up-the-environment)
+  - [2. Building the Backend](#2-building-the-backend)
+  - [3. Frontend: Setting Up Vue 3](#3-frontend-setting-up-vue-3)
+  - [4. Adding Default State and Local Drawing](#4-adding-default-state-and-local-drawing)
+- [Getting the Source Code](#getting-the-source-code)
+
 ## Target Audience
 
 - Intermediate web developers familiar with Vue 3, Node.js, and basic front-end concepts.
@@ -511,3 +525,42 @@ By the end of this tutorial, you will have built a fully functional collaborativ
      ```
 
    - **Testing Tip:** Click and drag on the canvas to draw lines. Ensure that the lines appear as you draw.
+
+## Getting the Source Code
+
+If you prefer to get the source code directly and run the project without following the tutorial, you can clone the repository and install the dependencies:
+
+1. **Clone the repository:**
+
+   ```sh
+   git clone https://github.com/your-username/collaborative-canvas-tanstack-sse.git
+   cd collaborative-canvas-tanstack-sse
+   ```
+
+2. **Install dependencies for both frontend and backend:**
+
+   ```sh
+   cd frontend
+   npm install
+   cd ../backend
+   npm install
+   cd ..
+   ```
+
+3. **Run the backend server:**
+
+   ```sh
+   cd backend
+   node server.js
+   ```
+
+4. **Run the frontend development server:**
+
+   ```sh
+   cd frontend
+   npm run dev
+   ```
+
+5. **Open the application in your browser:**
+
+   Visit `http://localhost:5173` to see the collaborative canvas in action.
