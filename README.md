@@ -38,7 +38,6 @@ By the end of this tutorial, you will have built a fully functional collaborativ
 - **Shared Collaborative Canvas**: Multiple users can draw on the same canvas simultaneously with real-time updates.
 - **Initial Canvas State**: New users see the existing canvas state upon joining the session, fetched using TanStack Query.
 - **Real-Time Drawing Updates**: As users draw, their actions are broadcast to all connected clients via SSE.
-- **Custom Drawing Tools**: Brush size, color selection, and eraser mode.
 - **Server-Side State Management**: Canvas state is stored in-memory on the server, simplifying implementation while focusing on real-time interactions.
 
 ## Technical Stack
