@@ -13,12 +13,6 @@ export function useCanvasState(canvasId) {
         queryFn: async () => {
             const response = await fetch(`http://localhost:3000/canvas/${canvasId}`);
             const data = await response.json();
-            lines.value = data.lines || [];
-            redoStack.value = [];
-            // Only clear currentDrawing if we're not actively drawing
-            if (!isDrawing.value) {
-                currentDrawing.value = null;
-            }
             return data;
         },
     });
@@ -26,25 +20,18 @@ export function useCanvasState(canvasId) {
     // Create a wrapper for refetch that also forces a lines update
     async function refetchState() {
         const result = await refetch();
-        if (result.data?.lines) {
-            lines.value = [...result.data.lines];
-            redoStack.value = [];
-            // Only clear currentDrawing if we're not actively drawing
-            if (!isDrawing.value) {
-                currentDrawing.value = null;
-            }
+        if (result.data) {
+            return result;
         }
-        return result;
     }
 
     // Update the visibility change handler to use refetchState
     const handleVisibilityChange = async () => {
         if (document.visibilityState === 'visible') {
-            // Only clear currentDrawing if we're not actively drawing
-            if (!isDrawing.value) {
-                currentDrawing.value = null;
+            const result = await refetch();
+            if (result.data) {
+                return result;
             }
-            await refetchState();
         }
     };
 
@@ -65,7 +52,7 @@ export function useCanvasState(canvasId) {
             const result = await response.json();
             return result;
         },
-        onSuccess: (result) => {
+        onSuccess: async (result) => {
             if (result.lines) {
                 lines.value = [...result.lines];
             }
@@ -74,21 +61,18 @@ export function useCanvasState(canvasId) {
 
     // Subscribe to SSE for real-time updates
     const eventSource = new EventSource(`http://localhost:3000/events/${canvasId}`);
-    eventSource.onmessage = (event) => {
+    eventSource.onmessage = async (event) => {
         const data = JSON.parse(event.data);
         
         switch (data.type) {
             case 'sync':
             case 'undo':
             case 'redo':
-                lines.value = Array.isArray(data.lines) ? [...data.lines] : [];
-                if (!isDrawing.value) {
-                    currentDrawing.value = null;
-                }
+                lines.value = [...data.lines];
                 break;
             case 'draw':
                 if (data.status === 'complete') {
-                    lines.value = Array.isArray(data.lines) ? [...data.lines] : [];
+                    lines.value = [...data.lines];
                     // Only clear if it's our drawing that completed
                     if (currentDrawing.value?.id === data.line.id) {
                         currentDrawing.value = null;
@@ -163,15 +147,15 @@ export function useCanvasState(canvasId) {
 
     function completeLine(finalLine) {
         const newLines = [...lines.value, finalLine];
-        lines.value = newLines;
-        currentDrawing.value = null;
         isDrawing.value = false;
-
-        mutation.mutate({ 
-            type: 'draw', 
-            status: 'complete',
-            line: finalLine,
-            lines: newLines
+        
+        refetch().then(() => {
+            mutation.mutate({ 
+                type: 'draw', 
+                status: 'complete',
+                line: finalLine,
+                lines: newLines
+            });
         });
     }
 

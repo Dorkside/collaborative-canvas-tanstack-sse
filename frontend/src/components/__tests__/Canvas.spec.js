@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { mount } from '@vue/test-utils';
 import Canvas from '../Canvas.vue';
+import { useCanvasState } from '@/composables/useCanvasState';
 
 describe('Canvas', () => {
   it('initializes with default state', () => {
@@ -24,4 +25,4 @@ describe('Canvas', () => {
     expect(wrapper.vm.isDrawing).toBe(true);
     expect(wrapper.vm.currentLine).toBeTruthy();
   });
-}); 
+});

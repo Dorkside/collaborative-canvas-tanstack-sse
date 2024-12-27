@@ -83,7 +83,7 @@ const {
   startLine,
   updateLine,
   completeLine,
-  refetchState
+  refetchState,
 } = useCanvasState(canvasId.value);
 
 // Watch for changes in lines
@@ -194,6 +194,7 @@ onUnmounted(() => {
   align-items: center;
   gap: 1rem;
   padding: 1rem;
+  position: relative;
 }
 
 .canvas-controls {
