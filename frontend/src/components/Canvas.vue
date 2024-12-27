@@ -7,10 +7,13 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue';
+import { ref, computed, onMounted } from 'vue';
+import { useRoute } from 'vue-router';
 import { useCanvasState } from '../composables/useCanvasState';
 
-const { lines, addLine } = useCanvasState();
+const route = useRoute();
+const canvasId = computed(() => route.params.canvasId || 'default');
+const { lines, addLine } = useCanvasState(canvasId.value);
 const isDrawing = ref(false);
 const currentLine = ref(null);
 

@@ -1,66 +1,79 @@
-const express = require("express");
-const cors = require("cors");
+const express = require('express');
+const cors = require('cors');
+const bodyParser = require('body-parser');
 
 const app = express();
-const port = 3000;
-
 app.use(cors());
-app.use(express.json());
+app.use(bodyParser.json());
 
-let canvasState = [
-  {
-    id: 1,
-    config: {
-      points: [50, 60, 70, 80],
-      stroke: 'red',
-      strokeWidth: 5,
-    },
-  },
-  {
-    id: 2,
-    config: {
-      points: [100, 120, 130, 150],
-      stroke: 'blue',
-      strokeWidth: 5,
-    },
-  },
-]; // Array of drawing actions (e.g., strokes)
-let canvasListeners = [];
+// Store canvases in memory (in production, you'd want to use a database)
+const canvases = new Map();
 
-// Endpoint to fetch canvas state
-app.get("/canvas", (req, res) => {
-  res.json(canvasState);
+// SSE clients for each canvas
+const canvasClients = new Map();
+
+// Helper to send updates to all clients subscribed to a specific canvas
+function notifyCanvasClients(canvasId, data) {
+    if (canvasClients.has(canvasId)) {
+        const clients = canvasClients.get(canvasId);
+        clients.forEach(client => {
+            client.write(`data: ${JSON.stringify(data)}\n\n`);
+        });
+    }
+}
+
+// Get canvas state
+app.get('/canvas/:canvasId', (req, res) => {
+    const { canvasId } = req.params;
+    const canvasData = canvases.get(canvasId) || [];
+    res.json(canvasData);
+});
+
+// Add new line to canvas
+app.post('/draw/:canvasId', (req, res) => {
+    const { canvasId } = req.params;
+    const newLine = req.body;
+
+    if (!canvases.has(canvasId)) {
+        canvases.set(canvasId, []);
+    }
+
+    const canvasData = canvases.get(canvasId);
+    canvasData.push(newLine);
+    
+    // Notify all clients subscribed to this canvas
+    notifyCanvasClients(canvasId, newLine);
+    
+    res.status(200).send();
 });
 
 // SSE endpoint for real-time updates
-app.get("/events", (req, res) => {
-  res.setHeader("Content-Type", "text/event-stream");
-  res.setHeader("Cache-Control", "no-cache");
-  res.setHeader("Connection", "keep-alive");
+app.get('/events/:canvasId', (req, res) => {
+    const { canvasId } = req.params;
 
-  // Send real-time updates when canvasState changes
-  const sendUpdate = (data) => {
-    res.write(`data: ${JSON.stringify(data)}\n\n`);
-  };
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.flushHeaders();
 
-  // Add listener for updates
-  canvasListeners.push(sendUpdate);
+    // Initialize clients array for this canvas if it doesn't exist
+    if (!canvasClients.has(canvasId)) {
+        canvasClients.set(canvasId, new Set());
+    }
 
-  req.on("close", () => {
-    canvasListeners = canvasListeners.filter(
-      (listener) => listener !== sendUpdate
-    );
-  });
+    const clients = canvasClients.get(canvasId);
+    clients.add(res);
+
+    // Remove client on connection close
+    req.on('close', () => {
+        clients.delete(res);
+        if (clients.size === 0) {
+            canvasClients.delete(canvasId);
+        }
+    });
 });
 
-// Endpoint to receive drawing actions
-app.post("/draw", (req, res) => {
-  const newAction = req.body;
-  canvasState.push(newAction);
-  canvasListeners.forEach((listener) => listener(newAction));
-  res.status(201).end();
-});
-
-app.listen(port, () => {
-  console.log(`Server running at http://localhost:${port}`);
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
 });
