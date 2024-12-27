@@ -5,6 +5,7 @@ export function useCanvasState(canvasId) {
     const lines = ref([]);
     const redoStack = ref([]);
     const currentDrawing = ref(null);
+    const isDrawing = ref(false);
 
     // Fetch initial canvas state
     const { isPending, isFetching, isError, error, data, refetch } = useQuery({
@@ -13,14 +14,37 @@ export function useCanvasState(canvasId) {
             const response = await fetch(`http://localhost:3000/canvas/${canvasId}`);
             const data = await response.json();
             lines.value = data.lines || [];
+            redoStack.value = [];
+            // Only clear currentDrawing if we're not actively drawing
+            if (!isDrawing.value) {
+                currentDrawing.value = null;
+            }
             return data;
         },
     });
 
-    // Refetch when tab becomes visible
+    // Create a wrapper for refetch that also forces a lines update
+    async function refetchState() {
+        const result = await refetch();
+        if (result.data?.lines) {
+            lines.value = [...result.data.lines];
+            redoStack.value = [];
+            // Only clear currentDrawing if we're not actively drawing
+            if (!isDrawing.value) {
+                currentDrawing.value = null;
+            }
+        }
+        return result;
+    }
+
+    // Update the visibility change handler to use refetchState
     const handleVisibilityChange = async () => {
         if (document.visibilityState === 'visible') {
-            await refetch();
+            // Only clear currentDrawing if we're not actively drawing
+            if (!isDrawing.value) {
+                currentDrawing.value = null;
+            }
+            await refetchState();
         }
     };
 
@@ -44,6 +68,9 @@ export function useCanvasState(canvasId) {
         onSuccess: (result) => {
             if (result.lines) {
                 lines.value = [...result.lines];
+                if (result.type !== 'redo') {
+                    redoStack.value = [];
+                }
             }
         }
     });
@@ -55,16 +82,30 @@ export function useCanvasState(canvasId) {
         
         switch (data.type) {
             case 'undo':
-            case 'redo':
             case 'sync':
                 lines.value = Array.isArray(data.lines) ? [...data.lines] : [];
                 redoStack.value = [];
+                if (!isDrawing.value) {
+                    currentDrawing.value = null;
+                }
+                break;
+            case 'redo':
+                lines.value = Array.isArray(data.lines) ? [...data.lines] : [];
+                if (!isDrawing.value) {
+                    currentDrawing.value = null;
+                }
                 break;
             case 'draw':
                 if (data.status === 'complete') {
                     lines.value = Array.isArray(data.lines) ? [...data.lines] : [];
                     redoStack.value = [];
+                    // Only clear if it's our drawing that completed
+                    if (currentDrawing.value?.id === data.line.id) {
+                        currentDrawing.value = null;
+                        isDrawing.value = false;
+                    }
                 } else if (data.line.id !== currentDrawing.value?.id) {
+                    // Only update other users' in-progress drawings
                     currentDrawing.value = data.line;
                 }
                 break;
@@ -110,6 +151,7 @@ export function useCanvasState(canvasId) {
     }
 
     function startLine(newLine) {
+        isDrawing.value = true;
         currentDrawing.value = newLine;
         mutation.mutate({ 
             type: 'draw', 
@@ -119,18 +161,21 @@ export function useCanvasState(canvasId) {
     }
 
     function updateLine(updatedLine) {
-        currentDrawing.value = updatedLine;
-        mutation.mutate({ 
-            type: 'draw', 
-            status: 'in-progress',
-            line: updatedLine 
-        });
+        if (isDrawing.value) {
+            currentDrawing.value = updatedLine;
+            mutation.mutate({ 
+                type: 'draw', 
+                status: 'in-progress',
+                line: updatedLine 
+            });
+        }
     }
 
     function completeLine(finalLine) {
         const newLines = [...lines.value, finalLine];
         lines.value = newLines;
         currentDrawing.value = null;
+        isDrawing.value = false;
 
         mutation.mutate({ 
             type: 'draw', 
@@ -154,5 +199,6 @@ export function useCanvasState(canvasId) {
         redo,
         canUndo: () => lines.value.length > 0,
         canRedo: () => redoStack.value.length > 0,
+        refetchState,
     };
 }

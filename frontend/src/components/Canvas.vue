@@ -82,13 +82,22 @@ const {
   error,
   startLine,
   updateLine,
-  completeLine 
+  completeLine,
+  refetchState
 } = useCanvasState(canvasId.value);
 
-// Simpler watcher that just increments the key
+// Watch for changes in lines
 watch(lines, () => {
   canvasKey.value++;
 });
+
+// Handle window focus and visibility changes
+async function handleFocusChange() {
+  if (document.hasFocus()) {
+    await refetchState();
+    canvasKey.value++;
+  }
+}
 
 const isDrawing = ref(false);
 const currentColor = ref('#000000');
@@ -169,10 +178,12 @@ function handleKeyboard(event) {
 
 onMounted(() => {
   window.addEventListener('keydown', handleKeyboard);
+  window.addEventListener('focus', handleFocusChange);
 });
 
 onUnmounted(() => {
   window.removeEventListener('keydown', handleKeyboard);
+  window.removeEventListener('focus', handleFocusChange);
 });
 </script>
 
