@@ -6,11 +6,19 @@ const app = express();
 app.use(cors());
 app.use(bodyParser.json());
 
-// Store canvases in memory (in production, you'd want to use a database)
+// Store canvases and their history in memory
 const canvases = new Map();
-
-// SSE clients for each canvas
+const canvasHistory = new Map();
 const canvasClients = new Map();
+
+// Initialize canvas if it doesn't exist
+function initializeCanvas(canvasId) {
+    if (!canvases.has(canvasId)) {
+        canvases.set(canvasId, {
+            lines: []
+        });
+    }
+}
 
 // Helper to send updates to all clients subscribed to a specific canvas
 function notifyCanvasClients(canvasId, data) {
@@ -25,26 +33,46 @@ function notifyCanvasClients(canvasId, data) {
 // Get canvas state
 app.get('/canvas/:canvasId', (req, res) => {
     const { canvasId } = req.params;
-    const canvasData = canvases.get(canvasId) || [];
+    initializeCanvas(canvasId);
+    const canvasData = canvases.get(canvasId);
     res.json(canvasData);
 });
 
 // Add new line to canvas
 app.post('/draw/:canvasId', (req, res) => {
     const { canvasId } = req.params;
-    const newLine = req.body;
+    const data = req.body;
+    
+    initializeCanvas(canvasId);
+    const canvas = canvases.get(canvasId);
 
-    if (!canvases.has(canvasId)) {
-        canvases.set(canvasId, []);
+    if (data.type === 'undo' || data.type === 'redo') {
+        canvas.lines = [...data.lines];
+        
+        notifyCanvasClients(canvasId, {
+            type: 'sync',
+            lines: canvas.lines,
+            timestamp: data.timestamp
+        });
+
+        // Send response with updated state
+        res.json({ lines: canvas.lines });
+    } else if (data.type === 'draw') {
+        if (data.status === 'complete') {
+            canvas.lines = [...data.lines];
+        }
+        
+        notifyCanvasClients(canvasId, {
+            type: 'draw',
+            status: data.status,
+            line: data.line,
+            lines: canvas.lines,
+            timestamp: data.timestamp
+        });
+
+        // Send response with updated state
+        res.json({ lines: canvas.lines });
     }
-
-    const canvasData = canvases.get(canvasId);
-    canvasData.push(newLine);
-    
-    // Notify all clients subscribed to this canvas
-    notifyCanvasClients(canvasId, newLine);
-    
-    res.status(200).send();
 });
 
 // SSE endpoint for real-time updates
