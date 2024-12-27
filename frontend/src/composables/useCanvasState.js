@@ -68,9 +68,6 @@ export function useCanvasState(canvasId) {
         onSuccess: (result) => {
             if (result.lines) {
                 lines.value = [...result.lines];
-                if (result.type !== 'redo') {
-                    redoStack.value = [];
-                }
             }
         }
     });
@@ -81,14 +78,8 @@ export function useCanvasState(canvasId) {
         const data = JSON.parse(event.data);
         
         switch (data.type) {
-            case 'undo':
             case 'sync':
-                lines.value = Array.isArray(data.lines) ? [...data.lines] : [];
-                redoStack.value = [];
-                if (!isDrawing.value) {
-                    currentDrawing.value = null;
-                }
-                break;
+            case 'undo':
             case 'redo':
                 lines.value = Array.isArray(data.lines) ? [...data.lines] : [];
                 if (!isDrawing.value) {
@@ -98,7 +89,6 @@ export function useCanvasState(canvasId) {
             case 'draw':
                 if (data.status === 'complete') {
                     lines.value = Array.isArray(data.lines) ? [...data.lines] : [];
-                    redoStack.value = [];
                     // Only clear if it's our drawing that completed
                     if (currentDrawing.value?.id === data.line.id) {
                         currentDrawing.value = null;
@@ -126,7 +116,6 @@ export function useCanvasState(canvasId) {
                 await refetch();
                 
                 if (lines.value.length > 0) {
-                    redoStack.value.push([...lines.value]);
                     const newLines = lines.value.slice(0, -1);
                     await mutation.mutateAsync({ 
                         type: 'undo',
@@ -140,13 +129,14 @@ export function useCanvasState(canvasId) {
     }
 
     async function redo() {
-        if (redoStack.value.length > 0) {
-            const nextState = redoStack.value.pop();
-            
+        try {
+            // Let the backend handle the redo operation
             await mutation.mutateAsync({ 
                 type: 'redo',
-                lines: nextState
+                lines: lines.value // Send current lines state
             });
+        } catch (error) {
+            console.error('Error during redo:', error);
         }
     }
 

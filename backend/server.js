@@ -8,7 +8,7 @@ app.use(bodyParser.json());
 
 // Store canvases and their history in memory
 const canvases = new Map();
-const canvasHistory = new Map();
+const canvasHistory = new Map(); // Will store undo/redo history for each canvas
 const canvasClients = new Map();
 
 // Initialize canvas if it doesn't exist
@@ -16,6 +16,11 @@ function initializeCanvas(canvasId) {
     if (!canvases.has(canvasId)) {
         canvases.set(canvasId, {
             lines: []
+        });
+        // Initialize history with empty state
+        canvasHistory.set(canvasId, {
+            undoStack: [],
+            redoStack: []
         });
     }
 }
@@ -45,20 +50,44 @@ app.post('/draw/:canvasId', (req, res) => {
     
     initializeCanvas(canvasId);
     const canvas = canvases.get(canvasId);
+    const history = canvasHistory.get(canvasId);
 
-    if (data.type === 'undo' || data.type === 'redo') {
-        canvas.lines = [...data.lines];
-        
-        notifyCanvasClients(canvasId, {
-            type: 'sync',
-            lines: canvas.lines,
-            timestamp: data.timestamp
-        });
-
-        // Send response with updated state
+    if (data.type === 'undo') {
+        if (canvas.lines.length > 0) {
+            // Save current state to redo stack
+            history.redoStack.push([...canvas.lines]);
+            // Update canvas with the new lines
+            canvas.lines = [...data.lines];
+            
+            notifyCanvasClients(canvasId, {
+                type: 'sync',
+                lines: canvas.lines,
+                timestamp: data.timestamp
+            });
+        }
         res.json({ lines: canvas.lines });
-    } else if (data.type === 'draw') {
+    } 
+    else if (data.type === 'redo') {
+        if (history.redoStack.length > 0) {
+            // Get the last state from redo stack
+            const redoState = history.redoStack.pop();
+            // Update canvas with the redo state
+            canvas.lines = redoState;
+            
+            notifyCanvasClients(canvasId, {
+                type: 'sync',
+                lines: canvas.lines,
+                timestamp: data.timestamp
+            });
+        }
+        res.json({ lines: canvas.lines });
+    }
+    else if (data.type === 'draw') {
         if (data.status === 'complete') {
+            // Clear redo stack when new drawing occurs
+            history.redoStack = [];
+            // Save current state before updating
+            history.undoStack.push([...canvas.lines]);
             canvas.lines = [...data.lines];
         }
         
@@ -70,7 +99,6 @@ app.post('/draw/:canvasId', (req, res) => {
             timestamp: data.timestamp
         });
 
-        // Send response with updated state
         res.json({ lines: canvas.lines });
     }
 });
