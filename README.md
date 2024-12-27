@@ -25,6 +25,17 @@ By the end of this tutorial, you will have built a fully functional collaborativ
   - [4. Adding Default State and Local Drawing](#4-adding-default-state-and-local-drawing)
   - [5. Making use of TanStack Query advanced features](#5-making-use-of-tanstack-query-advanced-features)
   - [6. Wrap-up: SSE vs Polling](#6-wrap-up-sse-vs-polling)
+  - [7. Going Further](#7-going-further)
+    - [Multiple Canvases Implementation](#multiple-canvases-implementation)
+      - [Key Changes](#key-changes)
+        - [URL-based Canvas Identification](#url-based-canvas-identification)
+        - [Enhanced State Management](#enhanced-state-management)
+        - [Server-Side Changes](#server-side-changes)
+      - [Benefits of TanStack Query in This Implementation](#benefits-of-tanstack-query-in-this-implementation)
+        - [Automatic Cache Management](#automatic-cache-management)
+        - [Optimistic Updates Per Canvas](#optimistic-updates-per-canvas)
+        - [Efficient Data Synchronization](#efficient-data-synchronization)
+      - [Try It Out](#try-it-out)
 - [Getting the Source Code](#getting-the-source-code)
 
 ## Target Audience
@@ -628,6 +639,76 @@ In many cases, these benefits justify the added complexity and learning curve, e
 ## Why TanStack?
 - **Flexible and Powerful**: TanStack Query handles complex data fetching scenarios with features like caching, invalidation, and optimistic updates.  
 - **Declarative Approach**: Less boilerplate code for tracking request states. Simplifies data flow and state management.
+
+## 7. Going Further
+
+### Multiple Canvases Implementation
+
+The base tutorial implements a single shared canvas, but we can extend this to support multiple independent canvases using URL parameters. This enhancement showcases the power of TanStack Query's advanced features. You can find this implementation in the `feature/multiple-canvases` branch.
+
+#### Key Changes
+
+1. **URL-based Canvas Identification**
+   - Each canvas gets a unique URL (e.g., `/canvas/room1`, `/canvas/design-team`)
+   - Users can share links to specific canvases
+   - Vue Router manages canvas navigation
+
+2. **Enhanced State Management**
+   - TanStack Query maintains separate caches for each canvas
+   - Query keys include canvas IDs: `['canvas', canvasId]`
+   - Optimistic updates work independently for each canvas
+
+3. **Server-Side Changes**
+   - Canvas data stored in separate collections
+   - SSE connections grouped by canvas ID
+   - Real-time updates only sent to relevant canvas subscribers
+
+#### Benefits of TanStack Query in This Implementation
+
+1. **Automatic Cache Management**
+   - Each canvas has its own cache entry
+   - No manual cache invalidation needed when switching canvases
+   - Automatic background refetching keeps canvases in sync
+
+2. **Optimistic Updates Per Canvas**
+   ```javascript
+   const mutation = useMutation({
+     mutationFn: (newLine) => {
+       return fetch(`http://localhost:3000/draw/${canvasId}`, ...);
+     },
+     onMutate: async (newLine) => {
+       // Optimistically update only this canvas's cache
+       await queryClient.cancelQueries(['canvas', canvasId]);
+       const previousLines = queryClient.getQueryData(['canvas', canvasId]);
+       queryClient.setQueryData(['canvas', canvasId], (old) => [...old, newLine]);
+       return { previousLines };
+     },
+   });
+   ```
+
+3. **Efficient Data Synchronization**
+   - Automatic deduplication of requests
+   - Smart background updates
+   - Proper error handling per canvas
+
+#### Try It Out
+
+To experiment with multiple canvases:
+
+1. Switch to the feature branch:
+   ```bash
+   git checkout feature/multiple-canvases
+   ```
+
+2. Start the server and frontend as usual
+
+3. Open multiple browser windows with different canvas IDs:
+   - http://localhost:5173/canvas/room1
+   - http://localhost:5173/canvas/room2
+
+Each canvas operates independently, with its own real-time updates and optimistic UI changes, while benefiting from TanStack Query's powerful caching and synchronization features.
+
+This implementation demonstrates how TanStack Query can elegantly handle more complex real-world scenarios while maintaining clean, maintainable code.
 
 ## Getting the Source Code
 
